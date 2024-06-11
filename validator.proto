@@ -11,7 +11,7 @@ package validator;
 
 import "google/protobuf/descriptor.proto";
 
-option go_package = "github.com/mwitkow/go-proto-validators;validator";
+option go_package = "github.com/coderyw/go-proto-validators;validator";
 
 // TODO(mwitkow): Email protobuf-global-extension-registry@google.com to get an extension ID.
 
@@ -32,6 +32,8 @@ message FieldValidator {
   optional int64 int_lt = 3;
   // Used for nested message types, requires that the message type exists.
   optional bool msg_exists = 4;
+  // 必填参数，参数非零值
+  optional bool required= 19;
   // Human error specifies a user-customizable error that is visible to the user.
   optional string human_error = 5;
   // Field value of double strictly greater than this value.
@@ -72,6 +74,10 @@ message FieldValidator {
   // uuid_ver specifies the valid UUID versions. Valid values are: 0-5.
   // If uuid_ver is 0 all UUID versions are accepted.
   optional int32 uuid_ver = 18;
+  // 字符串长度大于，属于字符串文字长度
+  optional int64 string_length_gt = 20;
+  optional int64 string_length_lt = 21;
+  optional int64 string_length_eq = 22;
 }
 
 message OneofValidator {

@@ -19,7 +19,11 @@ gazelle:
 
 install:
 	@echo "--- Installing 'govalidators' binary to GOBIN."
-	go install github.com/mwitkow/go-proto-validators/protoc-gen-govalidators
+	go install github.com/coderyw/go-proto-validators/protoc-gen-govalidators
+
+build:
+	@echo "--- Installing 'govalidators' binary to local."
+	go build github.com/coderyw/go-proto-validators/protoc-gen-govalidators -pkgdir github.com/coderyw/go-proto-validators/protoc-gen-govalidators/test
 
 regenerate_test_gogo: prepare_deps install
 	@echo "--- Regenerating test .proto files with gogo imports"
@@ -64,3 +68,21 @@ regenerate: prepare_deps
 
 clean:
 	rm -rf "deps"
+
+generate_validator_proto:
+	@echo "--- generate validator.proto"
+	protoc \
+	--proto_path="$(GOPATH)/pkg/mod" --proto_path="$(GOPATH)/src" \
+    --proto_path="/Users/yinwei/mygithub" \
+	--gogo_out=Mgoogle/protobuf/descriptor.proto=github.com/gogo/protobuf/protoc-gen-gogo/descriptor:. \
+	validator.proto -I .
+
+regenerate_test_gogo1: build
+	@echo "--- Regenerating test .proto files with gogo imports"
+	export PATH=$(extra_path):$${PATH}; protoc  \
+		--proto_path="$(GOPATH)/pkg/mod" --proto_path="$(GOPATH)/src" \
+        --proto_path="/Users/yinwei/mygithub" \
+		--proto_path=test \
+		--gogo_out=test/gogo \
+		--govalidators_out=gogoimport=true:test/gogo test/*.proto
+

@@ -1,3 +1,5 @@
+github.com/coderyw/protobuf v1.4.5 h1:wIUJoNQ0xr4vrGfE6VnpjMBFqf368fU1rI1g9UhVxsI=
+github.com/coderyw/protobuf v1.4.5/go.mod h1:IMryb4BEBokR/AG+eSxwBrtCMCUuOurVKMdVbiqZ4Pc=
 github.com/davecgh/go-spew v1.1.0 h1:ZDRjVQ15GmhC3fiQ8ni8+OwkZQO4DARzQgrnXU1Liz8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/gogo/protobuf v1.3.0 h1:G8O7TerXerS4F6sx9OV7/nRfJdnXgHZu/S/7F2SN+UE=

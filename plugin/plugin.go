@@ -2,7 +2,6 @@
 // See LICENSE for licensing terms.
 
 /*
-
 The validator plugin generates a Validate method for each message.
 By default, if none of the message's fields are annotated with the gogo validator annotation, it returns a nil.
 In case some of the fields are annotated, the Validate function returns nil upon sucessful validation, or an error
@@ -28,40 +27,33 @@ The equal plugin also generates a test given it is enabled using one of the foll
 
 Let us look at:
 
-  github.com/gogo/protobuf/test/example/example.proto
+	github.com/gogo/protobuf/test/example/example.proto
 
 Btw all the output can be seen at:
 
-  github.com/gogo/protobuf/test/example/*
+	github.com/gogo/protobuf/test/example/*
 
 The following message:
 
-
-
 given to the equal plugin, will generate the following code:
 
-
-
 and the following test code:
-
-
 */
 package plugin
 
 import (
 	"fmt"
+	"github.com/coderyw/protobuf/gogoproto"
+	"github.com/coderyw/protobuf/proto"
+	"github.com/coderyw/protobuf/protoc-gen-gogo/descriptor"
+	"github.com/coderyw/protobuf/protoc-gen-gogo/generator"
+	"github.com/coderyw/protobuf/vanity"
 	"os"
 	"reflect"
 	"strconv"
 	"strings"
 
-	"github.com/gogo/protobuf/gogoproto"
-	"github.com/gogo/protobuf/proto"
-	"github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
-	"github.com/gogo/protobuf/protoc-gen-gogo/generator"
-	"github.com/gogo/protobuf/vanity"
-
-	validator "github.com/mwitkow/go-proto-validators"
+	validator "github.com/coderyw/go-proto-validators"
 )
 
 const uuidPattern = "^([a-fA-F0-9]{8}-" +
@@ -76,6 +68,7 @@ type plugin struct {
 	regexPkg      generator.Single
 	fmtPkg        generator.Single
 	validatorPkg  generator.Single
+	utf8Pkg       generator.Single
 	useGogoImport bool
 }
 
@@ -98,8 +91,8 @@ func (p *plugin) Generate(file *generator.FileDescriptor) {
 	p.PluginImports = generator.NewPluginImports(p.Generator)
 	p.regexPkg = p.NewImport("regexp")
 	p.fmtPkg = p.NewImport("fmt")
-	p.validatorPkg = p.NewImport("github.com/mwitkow/go-proto-validators")
-
+	p.validatorPkg = p.NewImport("github.com/coderyw/go-proto-validators")
+	p.utf8Pkg = p.NewImport("unicode/utf8")
 	for _, msg := range file.Messages() {
 		if msg.DescriptorProto.GetOptions().GetMapEntry() {
 			continue
@@ -215,6 +208,9 @@ func (p *plugin) generateProto2Message(file *generator.FileDescriptor, message *
 		}
 		if p.validatorWithMessageExists(fieldValidator) {
 			fmt.Fprintf(os.Stderr, "WARNING: field %v.%v is a proto2 message, validator.msg_exists has no effect\n", ccTypeName, fieldName)
+		}
+		if p.validatorWithMessageRequire(fieldValidator) {
+			fmt.Fprintf(os.Stderr, "WARNING: field %v.%v is a proto2 message, validator.required has no effect\n", ccTypeName, fieldName)
 		}
 		variableName := "this." + fieldName
 		repeated := field.IsRepeated()
@@ -353,7 +349,7 @@ func (p *plugin) generateProto3Message(file *generator.FileDescriptor, message *
 		} else if field.IsBytes() {
 			p.generateLengthValidator(variableName, ccTypeName, fieldName, fieldValidator)
 		} else if field.IsMessage() {
-			if p.validatorWithMessageExists(fieldValidator) {
+			if p.validatorWithMessageExists(fieldValidator) || p.validatorWithMessageRequire(fieldValidator) {
 				if nullable && !repeated {
 					p.P(`if nil == `, variableName, `{`)
 					p.In()
@@ -400,6 +396,14 @@ func (p *plugin) generateProto3Message(file *generator.FileDescriptor, message *
 }
 
 func (p *plugin) generateIntValidator(variableName string, ccTypeName string, fieldName string, fv *validator.FieldValidator) {
+	if p.validatorWithMessageRequire(fv) {
+		p.P(`if `, variableName, `==0`)
+		p.In()
+		errorStr := "is required"
+		p.generateErrorString(variableName, fieldName, errorStr, fv)
+		p.Out()
+		p.P(`}`)
+	}
 	if fv.IntGt != nil {
 		p.P(`if !(`, variableName, ` > `, fv.IntGt, `) {`)
 		p.In()
@@ -422,7 +426,7 @@ func (p *plugin) generateEnumValidator(
 	field *descriptor.FieldDescriptorProto,
 	variableName, ccTypeName, fieldName string,
 	fv *validator.FieldValidator) {
-	if fv.GetIsInEnum() {
+	if fv.GetIsInEnum() || p.validatorWithMessageRequire(fv) {
 		enum := p.ObjectNamed(field.GetTypeName()).(*generator.EnumDescriptor)
 		p.P(`if _, ok := `, strings.Join(enum.TypeName(), "_"), "_name[int32(", variableName, ")]; !ok {")
 		p.In()
@@ -433,6 +437,15 @@ func (p *plugin) generateEnumValidator(
 }
 
 func (p *plugin) generateLengthValidator(variableName string, ccTypeName string, fieldName string, fv *validator.FieldValidator) {
+	if p.validatorWithMessageRequire(fv) {
+		p.P(`if len(`, variableName, `)==0`)
+		p.In()
+		errorStr := "is required"
+		p.generateErrorString(variableName, fieldName, errorStr, fv)
+		p.Out()
+		p.P(`}`)
+	}
+
 	if fv.LengthGt != nil {
 		p.P(`if !( len(`, variableName, `) > `, fv.LengthGt, `) {`)
 		p.In()
@@ -464,6 +477,15 @@ func (p *plugin) generateLengthValidator(variableName string, ccTypeName string,
 func (p *plugin) generateFloatValidator(variableName string, ccTypeName string, fieldName string, fv *validator.FieldValidator) {
 	upperIsStrict := true
 	lowerIsStrict := true
+
+	if p.validatorWithMessageRequire(fv) {
+		p.P(`if `, variableName, `==0`)
+		p.In()
+		errorStr := "is required"
+		p.generateErrorString(variableName, fieldName, errorStr, fv)
+		p.Out()
+		p.P(`}`)
+	}
 
 	// First check for incompatible constraints (i.e flt_lt & flt_lte both defined, etc) and determine the real limits.
 	if fv.FloatEpsilon != nil && fv.FloatLt == nil && fv.FloatGt == nil {
@@ -557,6 +579,46 @@ func getUUIDRegex(version *int32) (string, error) {
 }
 
 func (p *plugin) generateStringValidator(variableName string, ccTypeName string, fieldName string, fv *validator.FieldValidator) {
+	if p.validatorWithMessageRequire(fv) {
+		p.P(`if len(`, variableName, `)==0`)
+		p.In()
+		errorStr := "is required"
+		p.generateErrorString(variableName, fieldName, errorStr, fv)
+		p.Out()
+		p.P(`}`)
+	}
+	if fv.StringLengthGt != nil {
+		p.P(`if !`, p.utf8Pkg.Name(), `.RuneCountInString(`, variableName, `)>`, *fv.StringLengthGt)
+		p.In()
+		errorStr := "string length greater then  " + fmt.Sprint(*fv.StringLengthGt)
+		p.generateErrorString(variableName, fieldName, errorStr, fv)
+		p.Out()
+		p.P(`}`)
+	}
+	if fv.StringLengthLt != nil {
+		p.P(`if !`, p.utf8Pkg.Name(), `.RuneCountInString(`, variableName, `)<`, *fv.StringLengthLt)
+		p.In()
+		errorStr := "string length less then  " + fmt.Sprint(*fv.StringLengthLt)
+		p.generateErrorString(variableName, fieldName, errorStr, fv)
+		p.Out()
+		p.P(`}`)
+	}
+	if fv.StringLengthEq != nil {
+		p.P(`if !`, p.utf8Pkg.Name(), `.RuneCountInString(`, variableName, `)==`, *fv.StringLengthEq)
+		p.In()
+		errorStr := "string length equal " + fmt.Sprint(*fv.StringLengthEq)
+		p.generateErrorString(variableName, fieldName, errorStr, fv)
+		p.Out()
+		p.P(`}`)
+	}
+	if fv.StringLengthGt != nil {
+		p.P(`if !`, p.utf8Pkg.Name(), `.RuneCountInString(`, variableName, `)<=`, *fv.StringLengthGt)
+		p.In()
+		errorStr := "string length greater then  " + fmt.Sprint(*fv.StringLengthGt)
+		p.generateErrorString(variableName, fieldName, errorStr, fv)
+		p.Out()
+		p.P(`}`)
+	}
 	if fv.Regex != nil || fv.UuidVer != nil {
 		if fv.UuidVer != nil {
 			uuid, err := getUUIDRegex(fv.UuidVer)
@@ -657,6 +719,9 @@ func (p *plugin) fieldIsProto3Map(file *generator.FileDescriptor, message *gener
 
 func (p *plugin) validatorWithMessageExists(fv *validator.FieldValidator) bool {
 	return fv != nil && fv.MsgExists != nil && *(fv.MsgExists)
+}
+func (p *plugin) validatorWithMessageRequire(fv *validator.FieldValidator) bool {
+	return fv != nil && fv.Required != nil && *(fv.Required)
 }
 
 func (p *plugin) validatorWithNonRepeatedConstraint(fv *validator.FieldValidator) bool {
