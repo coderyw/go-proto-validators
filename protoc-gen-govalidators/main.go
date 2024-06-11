@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gogo/protobuf/proto"
-	"github.com/gogo/protobuf/protoc-gen-gogo/generator"
-	validator_plugin "github.com/mwitkow/go-proto-validators/plugin"
+	validator_plugin "github.com/coderyw/go-proto-validators/plugin"
+	"github.com/coderyw/protobuf/proto"
+	"github.com/coderyw/protobuf/protoc-gen-gogo/generator"
 )
 
 func main() {
