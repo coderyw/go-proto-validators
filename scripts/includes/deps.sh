@@ -43,7 +43,7 @@ function setup_proto_deps() {
     dep_dir="${PROJECT_DIR}/deps"
 
     proto_deps=(
-        "github.com/gogo/protobuf"
+        "github.com/coderyw/protobuf"
         "github.com/golang/protobuf"
         "github.com/coderyw/go-proto-validators"
     )

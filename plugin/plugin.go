@@ -108,9 +108,10 @@ func (p *plugin) Generate(file *generator.FileDescriptor) {
 
 func getFieldValidatorIfAny(field *descriptor.FieldDescriptorProto) *validator.FieldValidator {
 	if field.Options != nil {
+
 		v, err := proto.GetExtension(field.Options, validator.E_Field)
 		if err == nil && v.(*validator.FieldValidator) != nil {
-			return (v.(*validator.FieldValidator))
+			return v.(*validator.FieldValidator)
 		}
 	}
 	return nil
@@ -200,7 +201,9 @@ func (p *plugin) generateProto2Message(file *generator.FileDescriptor, message *
 
 	p.P(`func (this *`, ccTypeName, `) Validate() error {`)
 	p.In()
+	importPath := message.GoImportPath()
 	for _, field := range message.Field {
+
 		fieldName := p.GetFieldName(message, field)
 		fieldValidator := getFieldValidatorIfAny(field)
 		if fieldValidator == nil && !field.IsMessage() {
@@ -248,7 +251,7 @@ func (p *plugin) generateProto2Message(file *generator.FileDescriptor, message *
 		} else if p.isSupportedInt(field) {
 			p.generateIntValidator(variableName, ccTypeName, fieldName, fieldValidator)
 		} else if field.IsEnum() {
-			p.generateEnumValidator(field, variableName, ccTypeName, fieldName, fieldValidator)
+			p.generateEnumValidator(field, variableName, ccTypeName, fieldName, fieldValidator, string(importPath))
 		} else if p.isSupportedFloat(field) {
 			p.generateFloatValidator(variableName, ccTypeName, fieldName, fieldValidator)
 		} else if field.IsBytes() {
@@ -300,6 +303,8 @@ func (p *plugin) generateProto3Message(file *generator.FileDescriptor, message *
 			p.P(`}`)
 		}
 	}
+	importPath := message.GoImportPath()
+	//p.P(`// import `, message.GoImportPath())
 	for _, field := range message.Field {
 		fieldValidator := getFieldValidatorIfAny(field)
 		if fieldValidator == nil && !field.IsMessage() {
@@ -315,6 +320,7 @@ func (p *plugin) generateProto3Message(file *generator.FileDescriptor, message *
 			p.P(`// Validation of proto3 map<> fields is unsupported.`)
 			continue
 		}
+
 		if isOneOf {
 			p.In()
 			oneOfName := p.GetFieldName(message, field)
@@ -324,6 +330,15 @@ func (p *plugin) generateProto3Message(file *generator.FileDescriptor, message *
 			variableName = "oneOfNester." + p.GetOneOfFieldName(message, field)
 		}
 		if repeated {
+			if p.validatorWithMessageRequire(fieldValidator) {
+				p.P(`if len(`, variableName, `)==0{`)
+				p.In()
+				errorStr := "is required"
+				p.generateErrorString(variableName, fieldName, errorStr, fieldValidator)
+				p.Out()
+				p.P(`}`)
+			}
+
 			p.generateRepeatedCountValidator(variableName, ccTypeName, fieldName, fieldValidator)
 			if field.IsMessage() || p.validatorWithNonRepeatedConstraint(fieldValidator) {
 				p.P(`for _, item := range `, variableName, `{`)
@@ -343,7 +358,7 @@ func (p *plugin) generateProto3Message(file *generator.FileDescriptor, message *
 		} else if p.isSupportedInt(field) {
 			p.generateIntValidator(variableName, ccTypeName, fieldName, fieldValidator)
 		} else if field.IsEnum() {
-			p.generateEnumValidator(field, variableName, ccTypeName, fieldName, fieldValidator)
+			p.generateEnumValidator(field, variableName, ccTypeName, fieldName, fieldValidator, string(importPath))
 		} else if p.isSupportedFloat(field) {
 			p.generateFloatValidator(variableName, ccTypeName, fieldName, fieldValidator)
 		} else if field.IsBytes() {
@@ -397,7 +412,7 @@ func (p *plugin) generateProto3Message(file *generator.FileDescriptor, message *
 
 func (p *plugin) generateIntValidator(variableName string, ccTypeName string, fieldName string, fv *validator.FieldValidator) {
 	if p.validatorWithMessageRequire(fv) {
-		p.P(`if `, variableName, `==0`)
+		p.P(`if `, variableName, `==0{`)
 		p.In()
 		errorStr := "is required"
 		p.generateErrorString(variableName, fieldName, errorStr, fv)
@@ -425,12 +440,38 @@ func (p *plugin) generateIntValidator(variableName string, ccTypeName string, fi
 func (p *plugin) generateEnumValidator(
 	field *descriptor.FieldDescriptorProto,
 	variableName, ccTypeName, fieldName string,
-	fv *validator.FieldValidator) {
-	if fv.GetIsInEnum() || p.validatorWithMessageRequire(fv) {
+	fv *validator.FieldValidator, importPath string) {
+
+	if fv.GetIsInEnum() {
 		enum := p.ObjectNamed(field.GetTypeName()).(*generator.EnumDescriptor)
-		p.P(`if _, ok := `, strings.Join(enum.TypeName(), "_"), "_name[int32(", variableName, ")]; !ok {")
+		typeName := strings.Join(enum.TypeName(), "_")
+		imp := string(p.ObjectNamed(field.GetTypeName()).GoImportPath())
+
+		if imp != importPath { // 判断是否引入外部包
+			immmm := p.NewImport(imp)
+			typeName = immmm.Use() + "." + typeName
+
+		}
+		//p.P(`// 123`, imp)
+		p.P(`if _, ok := `, typeName, "_name[int32(", variableName, ")]; !ok {")
 		p.In()
 		p.generateErrorString(variableName, fieldName, fmt.Sprintf("be a valid %s field", strings.Join(enum.TypeName(), "_")), fv)
+		p.Out()
+		p.P(`}`)
+	}
+	if p.validatorWithMessageRequire(fv) {
+		enum := p.ObjectNamed(field.GetTypeName()).(*generator.EnumDescriptor)
+		typeName := strings.Join(enum.TypeName(), "_")
+		imp := string(p.ObjectNamed(field.GetTypeName()).GoImportPath())
+
+		if imp != importPath { // 判断是否引入外部包
+			immmm := p.NewImport(imp)
+			typeName = immmm.Use() + "." + typeName
+
+		}
+		p.P(`if `, variableName, `==0 {`)
+		p.In()
+		p.generateErrorString(variableName, fieldName, "is required", fv)
 		p.Out()
 		p.P(`}`)
 	}
@@ -438,7 +479,7 @@ func (p *plugin) generateEnumValidator(
 
 func (p *plugin) generateLengthValidator(variableName string, ccTypeName string, fieldName string, fv *validator.FieldValidator) {
 	if p.validatorWithMessageRequire(fv) {
-		p.P(`if len(`, variableName, `)==0`)
+		p.P(`if len(`, variableName, `)==0{`)
 		p.In()
 		errorStr := "is required"
 		p.generateErrorString(variableName, fieldName, errorStr, fv)
@@ -479,7 +520,7 @@ func (p *plugin) generateFloatValidator(variableName string, ccTypeName string, 
 	lowerIsStrict := true
 
 	if p.validatorWithMessageRequire(fv) {
-		p.P(`if `, variableName, `==0`)
+		p.P(`if `, variableName, `==0{`)
 		p.In()
 		errorStr := "is required"
 		p.generateErrorString(variableName, fieldName, errorStr, fv)
@@ -579,42 +620,34 @@ func getUUIDRegex(version *int32) (string, error) {
 }
 
 func (p *plugin) generateStringValidator(variableName string, ccTypeName string, fieldName string, fv *validator.FieldValidator) {
-	if p.validatorWithMessageRequire(fv) {
-		p.P(`if len(`, variableName, `)==0`)
-		p.In()
-		errorStr := "is required"
-		p.generateErrorString(variableName, fieldName, errorStr, fv)
-		p.Out()
-		p.P(`}`)
-	}
+	//if p.validatorWithMessageRequire(fv) {
+	//	p.P(`if len(`, variableName, `)==0{`)
+	//	p.In()
+	//	errorStr := "is required"
+	//	p.generateErrorString(variableName, fieldName, errorStr, fv)
+	//	p.Out()
+	//	p.P(`}`)
+	//}
 	if fv.StringLengthGt != nil {
-		p.P(`if !`, p.utf8Pkg.Name(), `.RuneCountInString(`, variableName, `)>`, *fv.StringLengthGt)
+		p.P(`if !(int64(`, p.utf8Pkg.Use(), `.RuneCountInString(`, variableName, `))>`, fv.StringLengthGt, `){`)
 		p.In()
-		errorStr := "string length greater then  " + fmt.Sprint(*fv.StringLengthGt)
+		errorStr := "have a word length greater than  " + fmt.Sprint(fv.GetStringLengthGt())
 		p.generateErrorString(variableName, fieldName, errorStr, fv)
 		p.Out()
 		p.P(`}`)
 	}
 	if fv.StringLengthLt != nil {
-		p.P(`if !`, p.utf8Pkg.Name(), `.RuneCountInString(`, variableName, `)<`, *fv.StringLengthLt)
+		p.P(`if !(int64(`, p.utf8Pkg.Use(), `.RuneCountInString(`, variableName, `))<`, fv.StringLengthLt, `){`)
 		p.In()
-		errorStr := "string length less then  " + fmt.Sprint(*fv.StringLengthLt)
+		errorStr := fmt.Sprintf("have a word length less then  %v", fv.GetStringLengthLt())
 		p.generateErrorString(variableName, fieldName, errorStr, fv)
 		p.Out()
 		p.P(`}`)
 	}
 	if fv.StringLengthEq != nil {
-		p.P(`if !`, p.utf8Pkg.Name(), `.RuneCountInString(`, variableName, `)==`, *fv.StringLengthEq)
+		p.P(`if !(int64(`, p.utf8Pkg.Use(), `.RuneCountInString(`, variableName, `))==`, fv.StringLengthEq, `){`)
 		p.In()
-		errorStr := "string length equal " + fmt.Sprint(*fv.StringLengthEq)
-		p.generateErrorString(variableName, fieldName, errorStr, fv)
-		p.Out()
-		p.P(`}`)
-	}
-	if fv.StringLengthGt != nil {
-		p.P(`if !`, p.utf8Pkg.Name(), `.RuneCountInString(`, variableName, `)<=`, *fv.StringLengthGt)
-		p.In()
-		errorStr := "string length greater then  " + fmt.Sprint(*fv.StringLengthGt)
+		errorStr := "have a word length equal " + fmt.Sprint(fv.GetStringLengthEq())
 		p.generateErrorString(variableName, fieldName, errorStr, fv)
 		p.Out()
 		p.P(`}`)
