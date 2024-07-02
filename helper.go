@@ -37,3 +37,8 @@ func FieldError(fieldName string, err error) error {
 		nestedErr:  err,
 	}
 }
+
+func IsFieldError(err error) bool {
+	_, ok := err.(*fieldError)
+	return ok
+}
