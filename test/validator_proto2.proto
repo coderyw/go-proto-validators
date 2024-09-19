@@ -3,8 +3,9 @@
 
 syntax = "proto2";
 package validatortest;
+//option go_package = "gitlab.jkluck.vip/casino/golang/ca-pay-maya/api/proto/maya;maya_proto";
 
-import "github.com/coderyw/protobuf@v1.4.5/gogoproto/gogo.proto";
+import "github/com/gogoproto/gogo.proto";
 import "validator.proto";
 
 // Top-level enum type definition.

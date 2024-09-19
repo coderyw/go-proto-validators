@@ -4,7 +4,7 @@
 syntax = "proto3";
 package validatortest;
 
-import "github.com/coderyw/protobuf@v1.4.5/gogoproto/gogo.proto";
+import "github/com/gogoproto/gogo.proto";
 import "validator.proto";
 
 // Top-level enum type definition.

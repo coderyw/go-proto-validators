@@ -20,4 +20,4 @@ regenerate_test_gogo1: build
 		--govalidators_out=gogoimport=true:test/gogo test/*.proto
 
 generate:
-	protoc --java_out=./ --proto_path="$(GOPATH)/pkg/mod" --proto_path="$(GOPATH)/src"  --proto_path="/Users/yinwei/mygithub"  validator.proto -I .
+	protoc --java_out=./ --proto_path="$GOPATH/pkg/mod" --proto_path="$GOPATH/src"  --proto_path="/Users/yinwei/mygithub"  validator.proto -I .

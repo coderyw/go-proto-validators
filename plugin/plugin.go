@@ -307,6 +307,10 @@ func (p *plugin) generateProto3Message(file *generator.FileDescriptor, message *
 	//p.P(`// import `, message.GoImportPath())
 	for _, field := range message.Field {
 		fieldValidator := getFieldValidatorIfAny(field)
+		if field.Options != nil {
+			p.P("// ", field.Options.String())
+		}
+
 		if fieldValidator == nil && !field.IsMessage() {
 			continue
 		}

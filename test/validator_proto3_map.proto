@@ -3,6 +3,7 @@
 
 syntax = "proto3";
 package validatortest;
+//option go_package = "gitlab.jkluck.vip/casino/golang/ca-pay-maya/api/proto/maya;maya_proto";
 
 message ValueType {
   string something  = 1 ;
