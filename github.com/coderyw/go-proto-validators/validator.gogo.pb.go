@@ -7,7 +7,7 @@ import (
 	fmt "fmt"
 	_ "github.com/coderyw/protobuf/gogoproto"
 	proto "github.com/coderyw/protobuf/proto"
-	descriptorpb "github.com/coderyw/protobuf/protoc-gen-gogo/descriptor"
+	descriptorpb "google.golang.org/protobuf/types/descriptorpb"
 	math "math"
 )
 
